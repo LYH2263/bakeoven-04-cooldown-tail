@@ -3,6 +3,7 @@ import { api } from "../api/client";
 type Block = { batch_id: number; code: string; oven_id: number; oven_label: string; phase: string; start_min: number; end_min: number };
 const DAY_START = 8 * 60, DAY_END = 18 * 60, SPAN = DAY_END - DAY_START;
 function pct(m: number) { return ((m - DAY_START) / SPAN) * 100; }
+const PHASE_TEXT: Record<string, string> = { ferment: "酵", bake: "烤", cool: "冷" };
 export default function GanttPage() {
   const [blocks, setBlocks] = useState<Block[]>([]);
   useEffect(() => { api<Block[]>("/gantt").then(setBlocks); }, []);
@@ -25,13 +26,18 @@ export default function GanttPage() {
             {row.blocks.map((b, i) => (
               <div key={i} className={`gantt-block ${b.phase}`}
                 style={{ left: `${pct(b.start_min)}%`, width: `${((b.end_min - b.start_min) / SPAN) * 100}%` }}
-                title={`${b.code} ${b.phase}`}>
-                {b.code}/{b.phase === "ferment" ? "酵" : "烤"}
+                title={`${b.code} ${b.phase} 段`}>
+                {b.code}/{PHASE_TEXT[b.phase] ?? b.phase}
               </div>
             ))}
           </div>
         </div>
       ))}
+    </div>
+    <div className="legend">
+      <span className="legend-item"><i className="swatch ferment" />发酵</span>
+      <span className="legend-item"><i className="swatch bake" />烘烤</span>
+      <span className="legend-item"><i className="swatch cool" />出炉冷却（仍占炉）</span>
     </div>
   </>);
 }

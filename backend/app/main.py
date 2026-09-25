@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from app.api.router import api_router
 from app.config import settings
@@ -12,6 +13,13 @@ from app.services.seed import seed_if_empty
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    # Lightweight column migration for pre-cooling databases on persisted volumes.
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "ALTER TABLE ovens ADD COLUMN IF NOT EXISTS cool_min INTEGER NOT NULL DEFAULT 0"
+            )
+        )
     if settings.seed_on_empty:
         db = SessionLocal()
         try:

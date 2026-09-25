@@ -14,7 +14,12 @@ class OvenOut(BaseModel):
     id: int
     label: str
     capacity_note: str
+    cool_min: int
     model_config = {"from_attributes": True}
+
+
+class OvenUpdate(BaseModel):
+    cool_min: int = Field(ge=0, le=24 * 60)
 
 
 class BatchOut(BaseModel):
@@ -28,6 +33,8 @@ class BatchOut(BaseModel):
     oven_label: str | None = None
     ferment_end: int | None = None
     bake_end: int | None = None
+    cool_min: int = 0
+    cool_end: int | None = None
     model_config = {"from_attributes": True}
 
 

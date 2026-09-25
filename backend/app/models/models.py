@@ -19,6 +19,7 @@ class Oven(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     label: Mapped[str] = mapped_column(String(40), unique=True)
     capacity_note: Mapped[str] = mapped_column(String(80), default="")
+    cool_min: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
 
 class Batch(Base):

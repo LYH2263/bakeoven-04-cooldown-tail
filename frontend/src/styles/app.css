@@ -11,6 +11,8 @@
   --accent: var(--bake-copper);
   --ferment: var(--bake-dough);
   --bake: var(--bake-ember);
+  --cool: #4a8291;
+  --cool-edge: #9fd8e6;
   --track: #1a1410;
   font-family: "Noto Sans SC", "IBM Plex Sans", system-ui, sans-serif;
 }
@@ -286,6 +288,39 @@ select, input, .gantt-deck button, .toolbar button {
   border: 1px solid #f0a060;
   box-shadow: 0 0 8px rgba(217, 121, 65, .35);
 }
+.gantt-block.cool {
+  top: 9px;
+  bottom: 9px;
+  background: repeating-linear-gradient(
+    135deg,
+    var(--cool) 0,
+    var(--cool) 5px,
+    #2f5a66 5px,
+    #2f5a66 9px
+  );
+  border: 1px dashed var(--cool-edge);
+  color: #e6f6fa;
+  opacity: .92;
+}
+.legend {
+  display: flex;
+  gap: 1rem;
+  margin-top: .75rem;
+  font-size: .78rem;
+  color: var(--bake-muted);
+  flex-wrap: wrap;
+}
+.legend-item { display: inline-flex; align-items: center; gap: .35rem; }
+.swatch { width: 14px; height: 12px; border-radius: 2px; display: inline-block; }
+.swatch.ferment { background: var(--ferment); border: 1px solid #a08060; }
+.swatch.bake { background: var(--bake); border: 1px solid #f0a060; }
+.swatch.cool {
+  background: repeating-linear-gradient(135deg, var(--cool) 0 4px, #2f5a66 4px 7px);
+  border: 1px dashed var(--cool-edge);
+}
+.hint { font-size: .8rem; color: var(--bake-muted); margin: 0 0 1rem; max-width: 60ch; line-height: 1.5; }
+.muted { color: var(--bake-muted); font-size: .8rem; }
+.inline-ok { margin-left: .5rem; font-size: .8rem; }
 .axis {
   display: grid;
   grid-template-columns: 120px 1fr;

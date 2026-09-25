@@ -10,6 +10,7 @@ from app.schemas.schemas import (
     ConflictOut,
     GanttBlock,
     OvenOut,
+    OvenUpdate,
     ProductOut,
     WindowOut,
 )
@@ -17,6 +18,7 @@ from app.services.oven_engine import (
     Occupancy,
     RecipeDurations,
     build_occupancies,
+    conflict_detail,
     find_conflicts,
     next_free_window,
 )
@@ -24,8 +26,8 @@ from app.services.oven_engine import (
 api_router = APIRouter()
 
 
-def _recipe(p: Product) -> RecipeDurations:
-    return RecipeDurations(p.ferment_min, p.bake_min)
+def _recipe(p: Product, cool_min: int = 0) -> RecipeDurations:
+    return RecipeDurations(p.ferment_min, p.bake_min, cool_min)
 
 
 def _all_occupancies(db: Session) -> list[Occupancy]:
@@ -33,9 +35,10 @@ def _all_occupancies(db: Session) -> list[Occupancy]:
     out: list[Occupancy] = []
     for b in batches:
         p = db.get(Product, b.product_id)
-        if not p:
+        o = db.get(Oven, b.oven_id)
+        if not p or not o:
             continue
-        out.extend(build_occupancies(b.oven_id, b.id, b.start_min, _recipe(p)))
+        out.extend(build_occupancies(b.oven_id, b.id, b.start_min, _recipe(p, o.cool_min)))
     return out
 
 
@@ -44,6 +47,7 @@ def _batch_out(db: Session, b: Batch) -> BatchOut:
     o = db.get(Oven, b.oven_id)
     ferment_end = b.start_min + (p.ferment_min if p else 0)
     bake_end = ferment_end + (p.bake_min if p else 0)
+    cool_min = o.cool_min if o else 0
     return BatchOut(
         id=b.id,
         product_id=b.product_id,
@@ -55,6 +59,8 @@ def _batch_out(db: Session, b: Batch) -> BatchOut:
         oven_label=o.label if o else None,
         ferment_end=ferment_end,
         bake_end=bake_end,
+        cool_min=cool_min,
+        cool_end=bake_end + cool_min if cool_min > 0 else bake_end,
     )
 
 
@@ -73,6 +79,17 @@ def ovens(db: Session = Depends(get_db)):
     return db.scalars(select(Oven).order_by(Oven.id)).all()
 
 
+@api_router.patch("/ovens/{oven_id}", response_model=OvenOut)
+def update_oven(oven_id: int, body: OvenUpdate, db: Session = Depends(get_db)):
+    oven = db.get(Oven, oven_id)
+    if not oven:
+        raise HTTPException(404, "炉位不存在")
+    oven.cool_min = body.cool_min
+    db.commit()
+    db.refresh(oven)
+    return oven
+
+
 @api_router.get("/batches", response_model=list[BatchOut])
 def batches(db: Session = Depends(get_db)):
     rows = db.scalars(select(Batch).order_by(Batch.start_min)).all()
@@ -85,17 +102,19 @@ def create_batch(body: BatchCreate, db: Session = Depends(get_db)):
     oven = db.get(Oven, body.oven_id)
     if not product or not oven:
         raise HTTPException(404, "产品或炉位不存在")
-    recipe = _recipe(product)
+    recipe = _recipe(product, oven.cool_min)
     candidates = build_occupancies(oven.id, -1, body.start_min, recipe)
     existing = _all_occupancies(db)
     hits = find_conflicts(existing, candidates)
     code = body.code or f"BO-{body.start_min}"
     if hits:
-        ex, cand = hits[0]
-        detail = (
-            f"与批次#{ex.batch_id} 的 {ex.phase} 段重叠："
-            f"[{cand.interval.start},{cand.interval.end})"
+        # Report a cooling clash ahead of an ordinary ferment/bake overlap.
+        hit = next(
+            (h for h in hits if h[0].phase == "cool" or h[1].phase == "cool"),
+            hits[0],
         )
+        ex, cand = hit
+        detail = conflict_detail(ex, cand, code)
         db.add(ConflictLog(batch_code=code, oven_id=oven.id, detail=detail))
         db.commit()
         raise HTTPException(409, detail)
@@ -119,7 +138,7 @@ def gantt(db: Session = Depends(get_db)):
         o = db.get(Oven, b.oven_id)
         if not p or not o:
             continue
-        for occ in build_occupancies(b.oven_id, b.id, b.start_min, _recipe(p)):
+        for occ in build_occupancies(b.oven_id, b.id, b.start_min, _recipe(p, o.cool_min)):
             blocks.append(
                 GanttBlock(
                     batch_id=b.id,
@@ -145,6 +164,8 @@ def windows(product_id: int, db: Session = Depends(get_db)):
     if not product:
         raise HTTPException(404, "产品不存在")
     duration = product.ferment_min + product.bake_min
+    # Cooling tails ride along as busy occupancies; the window search therefore
+    # never recommends the half-open cool segment after a bake.
     existing = _all_occupancies(db)
     out: list[WindowOut] = []
     for oven in db.scalars(select(Oven).order_by(Oven.id)).all():
