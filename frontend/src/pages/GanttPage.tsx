@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "../api/client";
 type Block = { batch_id: number; code: string; oven_id: number; oven_label: string; phase: string; start_min: number; end_min: number };
 const DAY_START = 8 * 60, DAY_END = 18 * 60, SPAN = DAY_END - DAY_START;
+const PHASE_TAG: Record<string, string> = { ferment: "酵", bake: "烤", cool: "冷" };
 function pct(m: number) { return ((m - DAY_START) / SPAN) * 100; }
 export default function GanttPage() {
   const [blocks, setBlocks] = useState<Block[]>([]);
@@ -25,8 +26,8 @@ export default function GanttPage() {
             {row.blocks.map((b, i) => (
               <div key={i} className={`gantt-block ${b.phase}`}
                 style={{ left: `${pct(b.start_min)}%`, width: `${((b.end_min - b.start_min) / SPAN) * 100}%` }}
-                title={`${b.code} ${b.phase}`}>
-                {b.code}/{b.phase === "ferment" ? "酵" : "烤"}
+                title={`${b.code} ${b.phase} ${b.start_min}-${b.end_min}`}>
+                {b.code}/{PHASE_TAG[b.phase] ?? b.phase}
               </div>
             ))}
           </div>

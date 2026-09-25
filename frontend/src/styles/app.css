@@ -11,6 +11,7 @@
   --accent: var(--bake-copper);
   --ferment: var(--bake-dough);
   --bake: var(--bake-ember);
+  --cool: #4f93b8;
   --track: #1a1410;
   font-family: "Noto Sans SC", "IBM Plex Sans", system-ui, sans-serif;
 }
@@ -285,6 +286,20 @@ select, input, .gantt-deck button, .toolbar button {
   background: var(--bake);
   border: 1px solid #f0a060;
   box-shadow: 0 0 8px rgba(217, 121, 65, .35);
+}
+/* cooling tail: hatched blue, visually distinct from ferment/bake */
+.gantt-block.cool {
+  background:
+    repeating-linear-gradient(
+      135deg,
+      rgba(79, 147, 184, .85) 0,
+      rgba(79, 147, 184, .85) 5px,
+      rgba(30, 60, 80, .85) 5px,
+      rgba(30, 60, 80, .85) 10px
+    );
+  border: 1px solid #7fc0e0;
+  color: #eaf6ff;
+  box-shadow: 0 0 8px rgba(79, 147, 184, .3);
 }
 .axis {
   display: grid;

@@ -1,4 +1,4 @@
-"""Oven scheduling with half-open ferment+bake intervals and next free window."""
+"""Oven scheduling with half-open ferment+bake+cool intervals and next free window."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class Interval:
     start: int  # minutes from day origin
-    end: int  # exclusive
+    end: int  # exclusive; half-open [start, end), back-to-back only touches endpoints
 
     def overlaps(self, other: "Interval") -> bool:
         return self.start < other.end and other.start < self.end
@@ -28,8 +28,15 @@ class RecipeDurations:
 class Occupancy:
     oven_id: int
     interval: Interval
-    phase: str  # ferment | bake
+    phase: str  # ferment | bake | cool
     batch_id: int
+
+    @property
+    def is_cool(self) -> bool:
+        return self.phase == "cool"
+
+
+PHASE_LABELS = {"ferment": "发酵", "bake": "烘烤", "cool": "冷却"}
 
 
 def build_occupancies(
@@ -37,16 +44,33 @@ def build_occupancies(
     batch_id: int,
     start_min: int,
     recipe: RecipeDurations,
+    cool_min: int = 0,
 ) -> list[Occupancy]:
+    """Ferment then bake; cooling trails the bake and keeps the oven busy.
+
+    Cooling is a per-oven tail, not a product duration: ferment_end / bake_end
+    math is untouched. cool_min <= 0 emits no occupancy, so the next batch may
+    start at the exact bake-end endpoint.
+    """
     ferment = Interval(start_min, start_min + recipe.ferment_min)
     bake = Interval(ferment.end, ferment.end + recipe.bake_min)
-    return [
+    occs = [
         Occupancy(oven_id, ferment, "ferment", batch_id),
         Occupancy(oven_id, bake, "bake", batch_id),
     ]
+    if cool_min > 0:
+        cool = Interval(bake.end, bake.end + cool_min)
+        occs.append(Occupancy(oven_id, cool, "cool", batch_id))
+    return occs
 
 
 def find_conflicts(existing: list[Occupancy], candidates: list[Occupancy]) -> list[tuple[Occupancy, Occupancy]]:
+    """Return (existing, candidate) overlapping pairs on the same oven.
+
+    A new batch's ferment/bake may not overlap a prior batch's half-open
+    cooling tail — during cooling the oven is still held. Candidate cooling is
+    checked too, since it also occupies the oven.
+    """
     hits: list[tuple[Occupancy, Occupancy]] = []
     for cand in candidates:
         for ex in existing:
@@ -64,7 +88,11 @@ def next_free_window(
     search_from: int = 0,
     search_to: int = 24 * 60,
 ) -> Interval | None:
-    """Find earliest half-open [start, start+duration) free on oven."""
+    """Find earliest half-open [start, start+duration) free on oven.
+
+    Every occupancy — cooling tails included — counts as busy, so a cooling
+    tail is never offered as a free gap.
+    """
     if duration <= 0:
         return None
     busy = sorted(
